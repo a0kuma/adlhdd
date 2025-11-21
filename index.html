@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <title>Embedded RAR Extractor (URL → !Rar → RAR → File list)</title>
@@ -11,37 +12,44 @@
       padding: 0 12px;
       line-height: 1.4;
     }
+
     h1 {
       font-size: 20px;
       margin-bottom: 8px;
     }
+
     input[type="text"] {
       width: 70%;
       padding: 6px 8px;
       font-size: 14px;
       box-sizing: border-box;
     }
+
     button {
       padding: 6px 12px;
       font-size: 14px;
       cursor: pointer;
       margin-left: 4px;
     }
+
     #status {
       margin: 10px 0;
       font-size: 13px;
       color: #555;
       white-space: pre-wrap;
     }
+
     #fileList {
       margin-top: 15px;
       border-top: 1px solid #ddd;
       padding-top: 10px;
     }
+
     .file-item {
       padding: 6px 0;
       border-bottom: 1px solid #eee;
     }
+
     .file-header {
       display: flex;
       justify-content: space-between;
@@ -49,29 +57,36 @@
       gap: 8px;
       flex-wrap: wrap;
     }
+
     .file-name {
       font-weight: bold;
       font-size: 14px;
     }
+
     .file-size {
       font-size: 12px;
       color: #666;
     }
+
     .preview {
       margin-top: 4px;
       font-size: 13px;
     }
+
     img.preview-img {
       max-width: 300px;
       max-height: 200px;
       display: block;
       margin-top: 4px;
     }
-    audio, video {
+
+    audio,
+    video {
       margin-top: 4px;
       max-width: 400px;
       display: block;
     }
+
     textarea.preview-txt {
       width: 100%;
       max-width: 600px;
@@ -84,6 +99,7 @@
     }
   </style>
 </head>
+
 <body>
   <h1>Embedded RAR Extractor</h1>
   <p style="font-size: 13px;">
@@ -92,8 +108,7 @@
     and show a simple file list (jpg / png / mp3 / mp4 / txt preview).
   </p>
 
-  <input type="text" id="urlInput"
-         placeholder="https://example.com/some.bin (with RAR embedded)" />
+  <input type="text" id="urlInput" placeholder="https://example.com/some.bin (with RAR embedded)" />
   <button id="goBtn">Fetch &amp; Extract</button>
 
   <div id="status"></div>
@@ -251,7 +266,7 @@
           if (
             lowerName.endsWith('.jpg') ||
             lowerName.endsWith('.jpeg') ||
-            lowerName.endsWith('.png')  ||
+            lowerName.endsWith('.png') ||
             lowerName.endsWith('.gif')
           ) {
             const img = document.createElement('img');
@@ -270,7 +285,7 @@
             previewEl.appendChild(audio);
 
           } else if (
-            lowerName.endsWith('.mp4')  ||
+            lowerName.endsWith('.mp4') ||
             lowerName.endsWith('.webm') ||
             lowerName.endsWith('.ogg')
           ) {
@@ -313,5 +328,11 @@
       }
     }
   </script>
+  <img src="https://adl.edu.tw/data/tmp/verlukawgfhawekufhsdalkfuiwe16816586a64ferwg.jpg" alt="Girl in a jacket"
+    width="500" height="600">
+  <img src="https://adl.edu.tw/data/QA/images/0003-user5284303_1763734135022_0.jpg" alt="Girl in a jacket" width="500"
+    height="600">
+
 </body>
+
 </html>
