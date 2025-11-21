@@ -1,5 +1,317 @@
-<html>
-  <head></head>
-  <body>
-<img src="https://adl.edu.tw/data/QA/images/0003-user5284303_1763732305325_0.png" alt="Girl in a jacket" width="500" height="600">
-</body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Embedded RAR Extractor (URL → !Rar → RAR → File list)</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      max-width: 900px;
+      margin: 20px auto;
+      padding: 0 12px;
+      line-height: 1.4;
+    }
+    h1 {
+      font-size: 20px;
+      margin-bottom: 8px;
+    }
+    input[type="text"] {
+      width: 70%;
+      padding: 6px 8px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+    button {
+      padding: 6px 12px;
+      font-size: 14px;
+      cursor: pointer;
+      margin-left: 4px;
+    }
+    #status {
+      margin: 10px 0;
+      font-size: 13px;
+      color: #555;
+      white-space: pre-wrap;
+    }
+    #fileList {
+      margin-top: 15px;
+      border-top: 1px solid #ddd;
+      padding-top: 10px;
+    }
+    .file-item {
+      padding: 6px 0;
+      border-bottom: 1px solid #eee;
+    }
+    .file-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .file-name {
+      font-weight: bold;
+      font-size: 14px;
+    }
+    .file-size {
+      font-size: 12px;
+      color: #666;
+    }
+    .preview {
+      margin-top: 4px;
+      font-size: 13px;
+    }
+    img.preview-img {
+      max-width: 300px;
+      max-height: 200px;
+      display: block;
+      margin-top: 4px;
+    }
+    audio, video {
+      margin-top: 4px;
+      max-width: 400px;
+      display: block;
+    }
+    textarea.preview-txt {
+      width: 100%;
+      max-width: 600px;
+      height: 120px;
+      margin-top: 4px;
+      font-family: monospace;
+      font-size: 12px;
+      white-space: pre;
+      box-sizing: border-box;
+    }
+  </style>
+</head>
+<body>
+  <h1>Embedded RAR Extractor</h1>
+  <p style="font-size: 13px;">
+    Enter a URL. The page will fetch it as binary, search for <code>!Rar</code>,
+    treat everything from that offset as a RAR archive, extract it in the browser,
+    and show a simple file list (jpg / png / mp3 / mp4 / txt preview).
+  </p>
+
+  <input type="text" id="urlInput"
+         placeholder="https://example.com/some.bin (with RAR embedded)" />
+  <button id="goBtn">Fetch &amp; Extract</button>
+
+  <div id="status"></div>
+  <div id="fileList"></div>
+
+  <!-- Remote Unarchiver.js (bundles libunrar etc. internally) -->
+  <!-- If you mirror this file on cdnjs, just change this src to your cdnjs URL. -->
+  <script src="https://xenova.github.io/unarchiver.js/dist/unarchiver.min.js"></script>
+
+  <script>
+    const statusEl = document.getElementById('status');
+    const fileListEl = document.getElementById('fileList');
+    const goBtn = document.getElementById('goBtn');
+    const urlInput = document.getElementById('urlInput');
+
+    function setStatus(msg) {
+      console.log(msg);
+      statusEl.textContent = msg;
+    }
+
+    goBtn.addEventListener('click', async () => {
+      const url = urlInput.value.trim();
+      if (!url) {
+        alert('Please enter a URL.');
+        return;
+      }
+
+      fileListEl.innerHTML = '';
+      setStatus('Fetching: ' + url + ' ...');
+
+      try {
+        const resp = await fetch(url);
+        if (!resp.ok) {
+          setStatus('HTTP error: ' + resp.status + ' ' + resp.statusText);
+          return;
+        }
+
+        const arrayBuffer = await resp.arrayBuffer();
+        const bytes = new Uint8Array(arrayBuffer);
+        setStatus('Fetched ' + bytes.length + ' bytes.\nSearching for "!Rar" marker...');
+
+        const rarOffset = findRarOffset(bytes);
+        if (rarOffset === -1) {
+          setStatus('No "!Rar" marker found in binary. Not a RAR-in-container file?');
+          return;
+        }
+
+        setStatus(
+          'Found "!Rar" at offset ' + rarOffset +
+          '.\nSlicing RAR data and opening archive...'
+        );
+
+        const rarBytes = bytes.subarray(rarOffset);
+        const files = await extractRarFromBytes(rarBytes);
+
+        renderFileList(files);
+        setStatus('Done. Extracted ' + files.length + ' file(s).');
+      } catch (e) {
+        console.error(e);
+        setStatus('Error: ' + (e && e.message ? e.message : String(e)));
+      }
+    });
+
+    // Find "!Rar" in binary data
+    function findRarOffset(bytes) {
+      const marker = [33, 82, 97, 114]; // "!Rar" in ASCII
+      outer:
+      for (let i = 0; i <= bytes.length - marker.length; i++) {
+        for (let j = 0; j < marker.length; j++) {
+          if (bytes[i + j] !== marker[j]) continue outer;
+        }
+        return i;
+      }
+      return -1;
+    }
+
+    /**
+     * Use Unarchiver.js to extract RAR from a Uint8Array containing only the RAR bytes.
+     * Returns array: [{ name, file, data(Uint8Array) }, ...]
+     */
+    async function extractRarFromBytes(rarBytes) {
+      // Wrap the bytes in a Blob & File so Unarchiver.open can read it.
+      const rarBlob = new Blob([rarBytes], { type: 'application/octet-stream' });
+      const rarFile = new File([rarBlob], 'embedded.rar', {
+        type: 'application/x-rar-compressed'
+      });
+
+      // Optional: preload RAR support (can be omitted; it lazy-loads formats).
+      if (typeof Unarchiver.load === 'function') {
+        await Unarchiver.load(['rar']);
+      }
+
+      const archive = await Unarchiver.open(rarFile);
+
+      const out = [];
+      for (const entry of archive.entries) {
+        if (!entry.is_file) continue;
+
+        const entryFile = await entry.read();                     // File object
+        const entryBuf = await entryFile.arrayBuffer();           // ArrayBuffer
+        const entryBytes = new Uint8Array(entryBuf);              // Uint8Array
+
+        out.push({
+          name: entry.name,
+          file: entryFile,
+          data: entryBytes
+        });
+      }
+
+      // If you want, you could call Unarchiver.close(archive) to free memory.
+      if (typeof Unarchiver.close === 'function') {
+        Unarchiver.close(archive);
+      }
+
+      return out;
+    }
+
+    // Render file list & simple preview for jpg/png/mp3/mp4/txt
+    function renderFileList(files) {
+      fileListEl.innerHTML = '';
+      if (!files || !files.length) {
+        fileListEl.textContent = 'No files extracted.';
+        return;
+      }
+
+      for (const file of files) {
+        const item = document.createElement('div');
+        item.className = 'file-item';
+
+        const header = document.createElement('div');
+        header.className = 'file-header';
+
+        const nameEl = document.createElement('div');
+        nameEl.className = 'file-name';
+        nameEl.textContent = file.name || '(no name)';
+        header.appendChild(nameEl);
+
+        const sizeEl = document.createElement('div');
+        sizeEl.className = 'file-size';
+        const size = file.file && typeof file.file.size === 'number'
+          ? file.file.size
+          : (file.data ? file.data.length : 0);
+        sizeEl.textContent = size + ' bytes';
+        header.appendChild(sizeEl);
+
+        item.appendChild(header);
+
+        const previewEl = document.createElement('div');
+        previewEl.className = 'preview';
+
+        if (file.file) {
+          const lowerName = (file.name || '').toLowerCase();
+          const url = URL.createObjectURL(file.file);
+
+          if (
+            lowerName.endsWith('.jpg') ||
+            lowerName.endsWith('.jpeg') ||
+            lowerName.endsWith('.png')  ||
+            lowerName.endsWith('.gif')
+          ) {
+            const img = document.createElement('img');
+            img.className = 'preview-img';
+            img.src = url;
+            previewEl.appendChild(img);
+
+          } else if (
+            lowerName.endsWith('.mp3') ||
+            lowerName.endsWith('.wav') ||
+            lowerName.endsWith('.ogg')
+          ) {
+            const audio = document.createElement('audio');
+            audio.controls = true;
+            audio.src = url;
+            previewEl.appendChild(audio);
+
+          } else if (
+            lowerName.endsWith('.mp4')  ||
+            lowerName.endsWith('.webm') ||
+            lowerName.endsWith('.ogg')
+          ) {
+            const video = document.createElement('video');
+            video.controls = true;
+            video.src = url;
+            previewEl.appendChild(video);
+
+          } else if (
+            lowerName.endsWith('.txt') ||
+            lowerName.endsWith('.log') ||
+            lowerName.endsWith('.csv')
+          ) {
+            // decode from Uint8Array if we have it
+            let text = '';
+            if (file.data) {
+              try {
+                const decoder = new TextDecoder('utf-8', { fatal: false });
+                text = decoder.decode(file.data);
+              } catch (e) {
+                text = '[Failed to decode as UTF-8]';
+              }
+            } else {
+              text = '[No data buffer available]';
+            }
+            const ta = document.createElement('textarea');
+            ta.className = 'preview-txt';
+            ta.value = text.length > 5000 ? text.slice(0, 5000) + '\n[truncated]' : text;
+            previewEl.appendChild(ta);
+
+          } else {
+            previewEl.textContent = 'No preview for this file type.';
+          }
+        } else {
+          previewEl.textContent = 'No data.';
+        }
+
+        item.appendChild(previewEl);
+        fileListEl.appendChild(item);
+      }
+    }
+  </script>
+</body>
+</html>
